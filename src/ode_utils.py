@@ -9,3 +9,18 @@ def runge_kutta_4order(t_prev, func_value_prev, func, h):
 	return func_value_prev + (k1 + 2*k2 + 2*k3 + k4)*h/6
 
 
+def solve_ivp(right_side_function, terminate_argument, initial_state, discrete_param, backward=False):
+	if backward:
+		right_side_function = lambda argument, state: -right_side_function(argument, state)
+
+	states = [initial_state, ]
+	state_prev = states[0]
+	arg_prev = 0
+	for arg in np.arange(discrete_param, terminate_argument, discrete_param):
+		state_new = runge_kutta_4order(arg_prev, state_prev, right_side_function, discrete_param)
+		states.append(state_new)
+		arg_prev = arg
+		state_prev = state_new
+	if backward:
+		states = states[::-1]
+	return np.array(states)
