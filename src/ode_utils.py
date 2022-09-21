@@ -19,8 +19,7 @@ def solve_ivp(right_side_function, initial_state, terminate_argument, discrete_p
 	arg_prev = 0
 	arg_space = np.arange(discrete_param, terminate_argument, discrete_param) if not backward else \
 		np.arange(terminate_argument-2*discrete_param, -discrete_param, -discrete_param)
-	# print(arg_space.shape)
-	# print(list(map(int, arg_space/discrete_param)))
+
 	for arg in arg_space:
 		state_new = runge_kutta_4order(arg_prev, state_prev, adjusted_right_side_function, discrete_param)
 		states.append(state_new)
