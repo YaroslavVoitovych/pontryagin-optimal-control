@@ -7,7 +7,7 @@ from typing import Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from src.utils import l2_norm, viz_1d_control
+from src.utils import l2_norm, viz_1d_control, viz_2d_heatmap
 from src.ode_utils import solve_ivp
 
 
@@ -162,6 +162,7 @@ class PMPProjectedGradientSolver(ABC):
         else:
             self.logger.info('Збіжності досягнуто')
 
+
 class PMPODESolver(PMPProjectedGradientSolver):
     def __init__(self, state_equation_function: Callable, adjoint_state_equation_function: Callable,
                  integrand_cost_function: Callable, cost_derivative_u_function: Callable,
@@ -195,4 +196,28 @@ class PMPODESolver(PMPProjectedGradientSolver):
 
     def integrate_cost(self, integrand_cost_function: Callable):
         return np.trapz(y=integrand_cost_function(self.time_range), x=self.time_range, dx=self.time_grid_step)
+
+
+class PMPPDESolver(PMPProjectedGradientSolver):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def visualize_control(self, dimensions: int = 2) -> None:
+        if dimensions == 2:
+            viz_2d_heatmap(self.current_u)
+        else:
+            viz_1d_control(self.time_range, self.current_u)
+
+    def solve_state_problem(self, u) -> np.array:
+        state = solve_ivp(self.state_equation_function(u), self.init_state, self.terminate_time, self.time_grid_step)
+        return state
+
+    def solve_adjoint_state_problem(self, state, u) -> np.array:
+        adjoint_state = solve_ivp(self.adjoint_state_equation_function(state, u), 0.0,
+                                  self.terminate_time, self.time_grid_step, backward=True)
+        return adjoint_state
+
+    def integrate_cost(self, integrand_cost_function: Callable):
+        return np.trapz(y=integrand_cost_function(self.time_range), x=self.time_range, dx=self.time_grid_step)
+
 

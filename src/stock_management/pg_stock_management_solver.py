@@ -25,7 +25,6 @@ class StockManagementProblem:
     g_3: np.float16 = None
     g_4: np.float16 = None
     h_state: np.float16 = 1e-2
-    h_gradient: np.float16 = 1e-3
     eps_cost_derivative: np.float16 = 1e-3
     ro_init: np.float16 = 1
     b: np.float16 = 0.6

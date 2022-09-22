@@ -1,0 +1,118 @@
+import logging
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+from typing import Callable
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
+
+from src.pg_pmp_solver import PMPPDESolver
+from src.utils import laplacian_operator_approximation_2d
+
+@dataclass
+class OptimalHarvestingLogisticProblem:
+    # Термінальні значення для часу і простору
+    T: np.float16
+    B: np.float16
+    y_initial: np.float16
+    u_initial: np.float16
+    # Параметри рівняння Фішера
+    gamma: np.float16
+    r: np.float16
+    k: np.float16
+    # Визначимо підпростір омега, як круг радіуса R_omega з центром в x_1_omega, x_2_omega:
+    x_1_omega: np.float16
+    x_2_omega: np.float16
+    R_omega: np.float16
+    # Межі функції керування
+    u_1: np.float16
+    u_2: np.float16
+    # Кроки дискретизації по часу та простору
+    h_state_time: np.float16 = 1e-2
+    h_state_space: np.float16 = 1e-2
+    # Технічні параметри для алгоритму Ерміджо
+    eps_cost_derivative: np.float16 = 1e-3
+    ro_init: np.float16 = 1
+    b: np.float16 = 0.6
+    eps_steplength: np.float16 = 1e-3
+    max_ro: np.int16 = 20
+    max_iter: np.int16 = 100
+
+    def __post_init__(self):
+        self.y_initial *= np.ones(shape=(1, int(self.B/self.h_state_space), int(self.B/self.h_state_space)))
+        self.u_initial *= np.ones(shape=self.y_initial.shape[1:])
+        # створюємо бінарну маску ядрової функції m, що задає підпростір омега, на якому застосовується керування
+        self.subspace_mask = np.zeros(shape=self.y_initial.shape[1:])
+        print(self.subspace_mask.shape[1])
+        for x1 in range(self.subspace_mask.shape[0]):
+            for x2 in range(self.subspace_mask.shape[1]):
+                self.subspace_mask[x1, x2] = 1 if (int(x1/self.h_state_space) - self.x_1_omega) ** 2 + \
+                                          (int(x2/self.h_state_space) - self.x_2_omega) ** 2 < self.R_omega ** 2 \
+                    else 0
+        self.u_initial *= self.subspace_mask
+
+        # Початковий розподіл популяції по ареалу
+        self.space_function = lambda x_1, x_2: self.y_initial[int(x_1/self.h_state_space), int(x_2/self.h_state_space)]
+
+
+if __name__ == '__main__':
+    ohl_problem_params = OptimalHarvestingLogisticProblem(T=10, B=10, y_initial=100, u_initial=0, gamma=1.0, r=1.0,
+                                                          k=1.0, x_1_omega=5, x_2_omega=5, R_omega=2, u_1=0, u_2=10)
+
+
+    def state_equation_function(u):
+        def _state_equation_function(t, state):
+            return ohl_problem_params.gamma * \
+                   laplacian_operator_approximation_2d(state[int(t/ohl_problem_params.h_state_time)],
+                                                       ohl_problem_params.h_state_space) + \
+                   ohl_problem_params.r * state[int(t/ohl_problem_params.h_state_time)] * \
+                   (1 - state[int(t/ohl_problem_params.h_state_time)]/ohl_problem_params.k) - \
+                    ohl_problem_params.subspace_mask * u[int(t/ohl_problem_params.h_state_time)] * \
+                   state[int(t/ohl_problem_params.h_state_time)]
+
+        return _state_equation_function
+
+    def adjoint_state_equation_function(state, u):
+        def _adjoint_state_equation_function(t, adjoint_state):
+            # Використовуємо рівність A=A* для лапласівського оператора
+            return -ohl_problem_params.gamma * \
+                   laplacian_operator_approximation_2d(adjoint_state[int(t/ohl_problem_params.h_state_time)],
+                                                       ohl_problem_params.h_state_space) - \
+                   ohl_problem_params.r * adjoint_state[int(t/ohl_problem_params.h_state_time)] * \
+                   (1 - 2*state[int(t/ohl_problem_params.h_state_time)] *
+                    adjoint_state[int(t/ohl_problem_params.h_state_time)]/ohl_problem_params.k) + \
+                    ohl_problem_params.subspace_mask * u[int(t/ohl_problem_params.h_state_time)] * \
+                   (1 + adjoint_state[int(t/ohl_problem_params.h_state_time)])
+        return _adjoint_state_equation_function
+
+    def integrand_cost_function(state, adjoint_state, u):
+        def _integrand_cost_function(t):
+            return np.sum(ohl_problem_params.subspace_mask *
+                    u[int(t/ohl_problem_params.h_state_time)] *
+                    state[int(t/ohl_problem_params.h_state_time)])
+        return _integrand_cost_function
+
+    def cost_derivative_u_function(u, state, adjoint_state):
+        return state * (1 + adjoint_state)
+
+    def projection_gradient_operator(u):
+        u[u < ohl_problem_params.u_1] = ohl_problem_params.u_1
+        u[u > ohl_problem_params.u_2] = ohl_problem_params.u_2
+        return u
+
+    optimal_harvesting_solver = PMPPDESolver(state_equation_function, adjoint_state_equation_function,
+                                           integrand_cost_function, cost_derivative_u_function,
+                                           projection_gradient_operator, 'Optimal_harvesting',
+                                           ohl_problem_params.u_initial, ohl_problem_params.T,
+                                           boundary_space=None, initial_state=ohl_problem_params.y_initial,
+                                           eps_cost_derivative=ohl_problem_params.eps_cost_derivative,
+                                           eps_gradient_step=ohl_problem_params.eps_steplength,
+                                           init_gradient_step=ohl_problem_params.ro_init,
+                                           gradient_adjustment=ohl_problem_params.b,
+                                           time_grid_step=ohl_problem_params.h_state_time,
+                                           space_grid_step=ohl_problem_params.h_state_space,
+                                           gradient_step_max_iter=ohl_problem_params.max_ro)
+
+    optimal_harvesting_solver.gradient_descent_loop()
+    optimal_harvesting_solver.visualize_control()
