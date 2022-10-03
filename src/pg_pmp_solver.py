@@ -16,7 +16,7 @@ class PMPProjectedGradientSolver(ABC):
                  integrand_cost_function: Callable, cost_derivative_u_function: Callable,
                  projection_gradient_operator: Callable, problem_name: str, init_u: np.array,
                  terminate_time: int, boundary_space: np.array = None, initial_state:np.array=None,
-                 eps_cost_derivative: np.float16 = 1e-3, eps_gradient_step: np.float16 = 1e-3,
+                 eps_cost_derivative: np.float16 = 1e-2, eps_gradient_step: np.float16 = 1e-2,
                  init_gradient_step: np.float16 = 1.0,
                  gradient_adjustment: np.float16 = 0.6,
                  time_grid_step: np.float16 = 1e-2, space_grid_step: np.float16 = None,
@@ -57,14 +57,14 @@ class PMPProjectedGradientSolver(ABC):
         self.adjoint_state_equation_function = adjoint_state_equation_function
         self.cost_derivative_u_function = cost_derivative_u_function
         self.integrand_cost_function = integrand_cost_function
-        self.gradient_projection_function = np.vectorize(projection_gradient_operator)
+        self.gradient_projection_function = projection_gradient_operator
 
         # Визначаємо вектори часу та простору
         self.time_range = np.arange(0, self.terminate_time, self.time_grid_step)
 
         # Присвоєння початкових умов
         self.current_gradient_iteration = 0
-        self.current_cost_derivative_u = [np.inf]
+        self.current_cost_derivative_u = np.array([np.inf])
         self.current_cost = np.inf
         self.new_cost = self.current_cost
         self.current_gradient_step = self.init_gradient_step
@@ -73,7 +73,9 @@ class PMPProjectedGradientSolver(ABC):
         self.new_u = self.current_u
 
     def norm_gradient_stop_condition(self) -> bool:
-        return l2_norm(self.current_cost_derivative_u) < self.eps_cost_derivative
+        grad_norm = l2_norm(self.current_cost_derivative_u)
+
+        return grad_norm < self.eps_cost_derivative
 
     def gradient_descent_loop_stop_condition(self) -> bool:
         stop_condition = (self.norm_gradient_stop_condition() &
@@ -108,10 +110,12 @@ class PMPProjectedGradientSolver(ABC):
 
             # Розв'язок рівняння стану
             self.current_state = self.solve_state_problem(self.current_u)
-
+            self.logger.info('State')
+           # self.logger.info(self.current_state)
             # Розв'язок рівняння спряженого стану
             self.current_adjoint_state = self.solve_adjoint_state_problem(self.current_state, self.current_u)
-
+            self.logger.info('adjoint State')
+            #self.logger.info(self.current_adjoint_state)
             # Обчислення градієнита функції втрат з урахуванням аналітичної формули похідної по керуванню
             self.current_cost_derivative_u = self.cost_derivative_u_function(self.current_u, self.current_state,
                                                                              self.current_adjoint_state)
@@ -131,9 +135,11 @@ class PMPProjectedGradientSolver(ABC):
                 if self.current_gradient_step < self.eps_gradient_step:
                     break
 
+
                 # Обчислення нового керування
                 self.new_u = self.gradient_projection_function(self.current_u - self.current_gradient_step *
                                                               self.current_cost_derivative_u)
+                print('cost_derivative')
 
                 # Розв'язок нового рівняння стану
                 self.new_state = self.solve_state_problem(self.new_u)
@@ -204,7 +210,9 @@ class PMPPDESolver(PMPProjectedGradientSolver):
 
     def visualize_control(self, dimensions: int = 2) -> None:
         if dimensions == 2:
+            print(self.current_u)
             viz_2d_heatmap(self.current_u)
+            viz_2d_heatmap(self.current_state)
         else:
             viz_1d_control(self.time_range, self.current_u)
 
@@ -213,7 +221,7 @@ class PMPPDESolver(PMPProjectedGradientSolver):
         return state
 
     def solve_adjoint_state_problem(self, state, u) -> np.array:
-        adjoint_state = solve_ivp(self.adjoint_state_equation_function(state, u), 0.0,
+        adjoint_state = solve_ivp(self.adjoint_state_equation_function(state, u), np.zeros_like(self.init_state),
                                   self.terminate_time, self.time_grid_step, backward=True)
         return adjoint_state
 

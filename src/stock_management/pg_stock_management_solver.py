@@ -85,3 +85,4 @@ if __name__ == '__main__':
 
     stock_management_solver.gradient_descent_loop()
     stock_management_solver.visualize_control()
+    plt.show()

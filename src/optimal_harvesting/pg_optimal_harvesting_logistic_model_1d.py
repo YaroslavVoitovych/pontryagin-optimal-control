@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from src.pg_pmp_solver import PMPPDESolver
-from src.utils import laplacian_operator_approximation_2d
+from src.utils import laplacian_operator_approximation_1d
+
 
 @dataclass
-class OptimalHarvestingLogisticProblem2D:
+class OptimalHarvestingLogisticProblem1D:
     # Термінальні значення для часу і простору
     T: np.float16
     B: np.float16
@@ -24,13 +25,12 @@ class OptimalHarvestingLogisticProblem2D:
     # Визначимо підпростір омега, як круг радіуса R_omega з центром в x_1_omega, x_2_omega:
     x_1_omega: np.float16
     x_2_omega: np.float16
-    R_omega: np.float16
     # Межі функції керування
     u_1: np.float16
     u_2: np.float16
     # Кроки дискретизації по часу та простору
-    h_state_time: np.float16 = 2e-2
-    h_state_space: np.float16 = 2e-2
+    h_state_time: np.float16 = 1e-2
+    h_state_space: np.float16 = 1e-2
     # Технічні параметри для алгоритму Ерміджо
     eps_cost_derivative: np.float16 = 1e-3
     ro_init: np.float16 = 1
@@ -40,31 +40,29 @@ class OptimalHarvestingLogisticProblem2D:
     max_iter: np.int16 = 100
 
     def __post_init__(self):
-        self.y_initial *= np.ones(shape=(int(self.B/self.h_state_space), int(self.B/self.h_state_space)))
+        self.y_initial *= np.ones(shape=(int(self.B/self.h_state_space),))
         self.u_initial *= np.ones(shape=(int(self.T/self.h_state_time), *self.y_initial.shape))
         # створюємо бінарну маску ядрової функції m, що задає підпростір омега, на якому застосовується керування
         self.subspace_mask = np.zeros(shape=self.y_initial.shape)
         for x1 in range(self.subspace_mask.shape[0]):
-            for x2 in range(self.subspace_mask.shape[1]):
-                self.subspace_mask[x1, x2] = 1 if (x1*self.h_state_space - self.x_1_omega) ** 2 + \
-                                          (x2*self.h_state_space - self.x_2_omega) ** 2 < self.R_omega ** 2 \
-                    else 0
+            self.subspace_mask[x1] = 1 if self.x_1_omega * self.subspace_mask.shape[0] < \
+                                          x1 < self.x_2_omega * self.subspace_mask.shape[0] else 0
         self.u_initial *= self.subspace_mask
 
         # Початковий розподіл популяції по ареалу
-        self.space_function = lambda x_1, x_2: self.y_initial[int(x_1/self.h_state_space), int(x_2/self.h_state_space)]
+        self.space_function = lambda x_1: self.y_initial[int(x_1/self.h_state_space)]
 
 
 if __name__ == '__main__':
-    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=0, gamma=.0001, r=1.0,
-                                                          k=100.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=-50, u_2=50)
+    ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=1, u_initial=-20, gamma=.006, r=10.0,
+                                                          k=100.0, x_1_omega=0.3, x_2_omega=.4,  u_1=-10, u_2=10)
 
 
     def state_equation_function(u):
         def _state_equation_function(t, state):
 
             return ohl_problem_params.gamma * \
-                   laplacian_operator_approximation_2d(state,
+                   laplacian_operator_approximation_1d(state,
                                                        ohl_problem_params.h_state_space) + \
                    ohl_problem_params.r * state * \
                    (1 - state/ohl_problem_params.k) - \
@@ -77,11 +75,10 @@ if __name__ == '__main__':
         def _adjoint_state_equation_function(t, adjoint_state):
             # Використовуємо рівність A=A* для лапласівського оператора
             return -ohl_problem_params.gamma * \
-                   laplacian_operator_approximation_2d(adjoint_state,
+                   laplacian_operator_approximation_1d(adjoint_state,
                                                        ohl_problem_params.h_state_space) - \
                    ohl_problem_params.r * adjoint_state * \
-                   (1 - 2*state[int(t/ohl_problem_params.h_state_time)] *
-                    adjoint_state/ohl_problem_params.k) + \
+                   (1 - 2*state[int(t/ohl_problem_params.h_state_time)]/ohl_problem_params.k) + \
                     ohl_problem_params.subspace_mask * u[int(t/ohl_problem_params.h_state_time)] * \
                    (1 + adjoint_state)
         return _adjoint_state_equation_function
