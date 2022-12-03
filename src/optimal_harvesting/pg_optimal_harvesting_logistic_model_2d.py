@@ -29,7 +29,7 @@ class OptimalHarvestingLogisticProblem2D:
     u_1: np.float16
     u_2: np.float16
     # Кроки дискретизації по часу та простору
-    h_state_time: np.float16 = 2e-2
+    h_state_time: np.float16 = 1e-2
     h_state_space: np.float16 = 2e-2
     # Технічні параметри для алгоритму Ерміджо
     eps_cost_derivative: np.float16 = 1e-3
@@ -56,9 +56,11 @@ class OptimalHarvestingLogisticProblem2D:
 
 
 if __name__ == '__main__':
-    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=0, gamma=.0001, r=1.0,
-                                                          k=100.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=-50, u_2=50)
+    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=0, gamma=.005, r=.01,
+                                                          k=1.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=0, u_2=20)
 
+    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=10, gamma=.0008, r=.01,
+                                                          k=1.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=0, u_2=10)
 
     def state_equation_function(u):
         def _state_equation_function(t, state):
@@ -88,18 +90,17 @@ if __name__ == '__main__':
 
     def integrand_cost_function(state, adjoint_state, u):
         def _integrand_cost_function(t):
-            return -np.sum(ohl_problem_params.subspace_mask *
+            res = -(np.sum(ohl_problem_params.subspace_mask *
                     u[int(t/ohl_problem_params.h_state_time)] *
-                    state[int(t/ohl_problem_params.h_state_time)])
+                    state[int(t/ohl_problem_params.h_state_time)]))
+            return res
         return _integrand_cost_function
 
     def cost_derivative_u_function(u, state, adjoint_state):
-
         return state * (1 + adjoint_state)
 
     def projection_gradient_operator(u):
         u[u < ohl_problem_params.u_1] = ohl_problem_params.u_1
-
         u[u > ohl_problem_params.u_2] = ohl_problem_params.u_2
         return u
 
@@ -117,5 +118,5 @@ if __name__ == '__main__':
                                            gradient_step_max_iter=ohl_problem_params.max_ro)
 
     optimal_harvesting_solver.gradient_descent_loop()
-    optimal_harvesting_solver.visualize_control()
+    optimal_harvesting_solver.visualize_control(dimensions=3)
     plt.show()

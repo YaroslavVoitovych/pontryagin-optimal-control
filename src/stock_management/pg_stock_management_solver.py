@@ -62,13 +62,20 @@ if __name__ == '__main__':
     def cost_derivative_u_function(u, state, adjoint_state):
         return adjoint_state + sm_problem_params.a
 
+
     def projection_gradient_operator(u):
-        if sm_problem_params.u_1 <= u <= sm_problem_params.u_2:
-            return u
-        elif u < sm_problem_params.u_1:
-            return sm_problem_params.u_1
+        def _operator(_u):
+            if sm_problem_params.u_1 <= _u <= sm_problem_params.u_2:
+                return _u
+            elif _u < sm_problem_params.u_1:
+                return sm_problem_params.u_1
+            else:
+                return sm_problem_params.u_2
+
+        if isinstance(u, np.ndarray):
+            return np.vectorize(_operator)(u)
         else:
-            return sm_problem_params.u_2
+            return _operator(u)
 
 
     stock_management_solver = PMPODESolver(state_equation_function, adjoint_state_equation_function,

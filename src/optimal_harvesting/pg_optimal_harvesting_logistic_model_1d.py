@@ -54,13 +54,14 @@ class OptimalHarvestingLogisticProblem1D:
 
 
 if __name__ == '__main__':
-    ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=1, u_initial=-20, gamma=.006, r=10.0,
-                                                          k=100.0, x_1_omega=0.3, x_2_omega=.4,  u_1=-10, u_2=10)
+    # ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=1, u_initial=10, gamma=.006, r=10.0,
+    #                                                       k=100.0, x_1_omega=0.2, x_2_omega=.8,  u_1=-20, u_2=10)
 
+    ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=10, u_initial=10, gamma=0.006, r=.01,
+                                                           k=1.0, x_1_omega=0.2, x_2_omega=.8,  u_1=0, u_2=10)
 
     def state_equation_function(u):
         def _state_equation_function(t, state):
-
             return ohl_problem_params.gamma * \
                    laplacian_operator_approximation_1d(state,
                                                        ohl_problem_params.h_state_space) + \
@@ -85,18 +86,16 @@ if __name__ == '__main__':
 
     def integrand_cost_function(state, adjoint_state, u):
         def _integrand_cost_function(t):
-            return -np.sum(ohl_problem_params.subspace_mask *
+            return -(np.sum(ohl_problem_params.subspace_mask *
                     u[int(t/ohl_problem_params.h_state_time)] *
-                    state[int(t/ohl_problem_params.h_state_time)])
+                    state[int(t/ohl_problem_params.h_state_time)]))
         return _integrand_cost_function
 
     def cost_derivative_u_function(u, state, adjoint_state):
-
         return state * (1 + adjoint_state)
 
     def projection_gradient_operator(u):
         u[u < ohl_problem_params.u_1] = ohl_problem_params.u_1
-
         u[u > ohl_problem_params.u_2] = ohl_problem_params.u_2
         return u
 
