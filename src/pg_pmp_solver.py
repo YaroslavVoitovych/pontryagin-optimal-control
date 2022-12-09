@@ -159,7 +159,7 @@ class PMPProjectedGradientSolver(ABC):
                 cost_func = np.vectorize(self.integrand_cost_function(self.new_state, self.new_adjoint_state, self.new_u))
                 self.new_cost = self.integrate_cost(cost_func)
 
-                print(self.new_cost)
+                #print(self.new_cost)
                 if self.new_cost >= self.current_cost:
                     self.adjust_gradient_step()
                 else:
@@ -236,6 +236,8 @@ class PMPPDESolver(PMPProjectedGradientSolver):
             print(self.current_u)
             viz_2d_heatmap(self.current_u, 'Оптимальний контроль', save=True)
             viz_2d_heatmap(self.current_state, 'Стан системи', save=True)
+            viz_2d_heatmap(self.current_state, 'Стан системи', save=True)
+
             viz_3d_plot(self.current_u, 'Оптимальний контроль', save=True)
             viz_3d_plot(self.current_state, 'Оптимальний контроль', save=True)
         elif dimensions == 3:
@@ -245,6 +247,10 @@ class PMPPDESolver(PMPProjectedGradientSolver):
             viz_2d_heatmap(self.current_state[0, :, :], 'Системи на початку', save=True)
             viz_2d_heatmap(self.current_u[-1, :, :], 'Оптимальний контроль в кінці', save=True)
             viz_2d_heatmap(self.current_state[-1, :, :], 'Системи в кінці', save=True)
+            viz_3d_plot(self.current_state[-1, :, :], 'Система в останній момент часу', save=True)
+            viz_3d_plot(self.current_state[0, :, :], 'Системи в початковий момент часу', save=True)
+            viz_3d_plot(self.current_u[-1, :, :], 'Оптимальне керування в останній момент часу', save=True)
+            viz_3d_plot(self.current_u[0, :, :], 'Оптимальне керування в початковий момент часу', save=True)
 
         else:
             viz_1d_control(self.time_range, self.current_u)

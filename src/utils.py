@@ -46,7 +46,7 @@ def viz_1d_control(time: np.array, control: np.array, title='None', x_label='Non
     plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.plot(time, control, c='maroon', linewidth=3)
+    plt.plot(time, control, c='red', linewidth=3)
     plt.grid()
     plt.show()
 
@@ -83,9 +83,19 @@ def viz_3d_plot(matrix, name, save=False):
     ax = fig.add_subplot(111, projection='3d')
     X, Y = np.meshgrid(x, y)  # `plot_surface` expects `x` and `y` data to be 2D
     surf = ax.plot_surface(X, Y, matrix,rstride=1, cstride=1, cmap=cm.turbo, linewidth=0, antialiased=False)
-    ax.set_xlabel('Просторова координата, см')
-    ax.set_ylabel('Час, год')
+    ax.set_xlabel('Просторова координата x1, см')
+    ax.set_ylabel('Просторова координата x2, см')
     ax.set_zlabel('Значення функції стану системи')
     fig.colorbar(surf, shrink=0.5, aspect=10)
     plt.savefig(os.path.join(PLOTS_DIR, f'3D_{name}_{datetime.datetime.now().timestamp()}.png'), )
+    plt.show()
+
+
+def viz_1d_compare(time: np.array, matrix1: np.array, matrix2: np.array, title1='None', title2='None', x_label='None', y_label='None'):
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.plot(time, matrix1, c='maroon', linewidth=3, label=title1)
+    plt.scatter(time[::5], matrix2[::5], c='blue', linewidth=3, label=title2)
+    plt.legend()
+    plt.grid()
     plt.show()

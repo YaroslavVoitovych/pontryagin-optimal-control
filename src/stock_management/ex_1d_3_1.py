@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from src.pg_pmp_solver import PMPODESolver
-from src.utils import viz_1d_control
+from src.utils import viz_1d_control, viz_1d_compare
+
 
 @dataclass
 class StockManagementProblem:
@@ -102,4 +103,11 @@ if __name__ == '__main__':
     viz_1d_control(ex1_solver.time_range, analytic_solution_state(ex1_solver.time_range))
     print('Аналітичний розвязок, мінімум функціоналу',
           np.trapz(y=0.5*(analytic_solution_state(ex1_solver.time_range)**2 + analytic_solution_control(ex1_solver.time_range)**2), x=ex1_solver.time_range, dx=ex1_solver.time_grid_step))
+    viz_1d_compare(ex1_solver.time_range, ex1_solver.current_state, analytic_solution_state(ex1_solver.time_range),'Апроксимований оптимальний стан',
+                   'Аналітично обчислений оптимальний стан', 'Час, год', 'Значення стану')
+    viz_1d_compare(ex1_solver.time_range, ex1_solver.current_u, analytic_solution_control(ex1_solver.time_range),
+                   'Апроксимоване оптимальне керування',
+                   'Аналітично обчислене оптимальне керування', 'Час, год', 'Значення керування')
+    viz_1d_control(ex1_solver.time_range[:-2], (ex1_solver.current_u - analytic_solution_control(ex1_solver.time_range))[:-2],
+                   'Розподіл похибки апроксимації оптимального керування', 'Час, год', 'Значення керування')
     plt.show()

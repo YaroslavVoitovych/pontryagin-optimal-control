@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from src.pg_pmp_solver import PMPPDESolver
-from src.utils import laplacian_operator_approximation_1d
-
+from src.utils import laplacian_operator_approximation_1d, viz_2d_heatmap
 
 @dataclass
 class OptimalHarvestingLogisticProblem1D:
@@ -29,8 +28,8 @@ class OptimalHarvestingLogisticProblem1D:
     u_1: np.float16
     u_2: np.float16
     # Кроки дискретизації по часу та простору
-    h_state_time: np.float16 = 1e-2
-    h_state_space: np.float16 = 1e-2
+    h_state_time: np.float16 = 5e-2
+    h_state_space: np.float16 = 5e-2
     # Технічні параметри для алгоритму Ерміджо
     eps_cost_derivative: np.float16 = 1e-3
     ro_init: np.float16 = 1
@@ -57,8 +56,10 @@ if __name__ == '__main__':
     # ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=1, u_initial=10, gamma=.006, r=10.0,
     #                                                       k=100.0, x_1_omega=0.2, x_2_omega=.8,  u_1=-20, u_2=10)
 
-    ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=1, B=1, y_initial=10, u_initial=10, gamma=0.006, r=.01,
-                                                           k=1.0, x_1_omega=0.2, x_2_omega=.8,  u_1=0, u_2=10)
+    ohl_problem_params = OptimalHarvestingLogisticProblem1D(T=10, B=10, y_initial=10, u_initial=0.5,
+                                                            gamma=0.006,
+                                                            r=.01,
+                                                           k=1.0, x_1_omega=0.2, x_2_omega=.8,  u_1=0, u_2=1)
 
     def state_equation_function(u):
         def _state_equation_function(t, state):
@@ -114,4 +115,6 @@ if __name__ == '__main__':
 
     optimal_harvesting_solver.gradient_descent_loop()
     optimal_harvesting_solver.visualize_control()
+    viz_2d_heatmap(ohl_problem_params.subspace_mask * optimal_harvesting_solver.current_u * \
+             optimal_harvesting_solver.current_state, name='asfas')
     plt.show()

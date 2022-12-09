@@ -59,8 +59,8 @@ if __name__ == '__main__':
     ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=0, gamma=.005, r=.01,
                                                           k=1.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=0, u_2=20)
 
-    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=10, u_initial=10, gamma=.0008, r=.01,
-                                                          k=1.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.2, u_1=0, u_2=10)
+    ohl_problem_params = OptimalHarvestingLogisticProblem2D(T=1, B=1, y_initial=1, u_initial=0.5, gamma=.001, r=.01,
+                                                          k=1.0, x_1_omega=0.5, x_2_omega=0.5, R_omega=0.5, u_1=0, u_2=1)
 
     def state_equation_function(u):
         def _state_equation_function(t, state):
