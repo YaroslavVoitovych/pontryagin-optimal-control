@@ -1,4 +1,7 @@
+import matplotlib.pyplot as plt
 import numpy as np
+
+from src.utils import viz_2d_heatmap
 
 
 def runge_kutta_4order(t_prev, func_value_prev, func, h):
@@ -20,11 +23,14 @@ def solve_ivp(right_side_function, initial_state, terminate_argument, discrete_p
 	arg_space = np.arange(discrete_param, terminate_argument, discrete_param) if not backward else \
 		np.arange(terminate_argument-2*discrete_param, -discrete_param, -discrete_param)
 
-	for arg in arg_space:
+	for cnt, arg in enumerate(arg_space):
+
 		state_new = runge_kutta_4order(arg_prev, state_prev, adjusted_right_side_function, discrete_param)
 		states.append(state_new)
+
 		arg_prev = arg
 		state_prev = state_new
+
 	if backward:
 		states = states[::-1]
 	return np.array(states)

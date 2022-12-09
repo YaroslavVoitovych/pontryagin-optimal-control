@@ -25,7 +25,6 @@ class StockManagementProblem:
     g_3: np.float16 = None
     g_4: np.float16 = None
     h_state: np.float16 = 1e-2
-    h_gradient: np.float16 = 1e-3
     eps_cost_derivative: np.float16 = 1e-3
     ro_init: np.float16 = 1
     b: np.float16 = 0.6
@@ -63,13 +62,20 @@ if __name__ == '__main__':
     def cost_derivative_u_function(u, state, adjoint_state):
         return adjoint_state + sm_problem_params.a
 
+
     def projection_gradient_operator(u):
-        if sm_problem_params.u_1 <= u <= sm_problem_params.u_2:
-            return u
-        elif u < sm_problem_params.u_1:
-            return sm_problem_params.u_1
+        def _operator(_u):
+            if sm_problem_params.u_1 <= _u <= sm_problem_params.u_2:
+                return _u
+            elif _u < sm_problem_params.u_1:
+                return sm_problem_params.u_1
+            else:
+                return sm_problem_params.u_2
+
+        if isinstance(u, np.ndarray):
+            return np.vectorize(_operator)(u)
         else:
-            return sm_problem_params.u_2
+            return _operator(u)
 
 
     stock_management_solver = PMPODESolver(state_equation_function, adjoint_state_equation_function,
@@ -86,3 +92,4 @@ if __name__ == '__main__':
 
     stock_management_solver.gradient_descent_loop()
     stock_management_solver.visualize_control()
+    plt.show()

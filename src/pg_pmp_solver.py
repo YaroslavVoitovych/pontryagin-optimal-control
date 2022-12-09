@@ -7,7 +7,7 @@ from typing import Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from src.utils import l2_norm, viz_1d_control
+from src.utils import l2_norm, viz_1d_control, viz_2d_heatmap, viz_2d_time_gif, viz_3d_plot
 from src.ode_utils import solve_ivp
 
 
@@ -15,12 +15,13 @@ class PMPProjectedGradientSolver(ABC):
     def __init__(self, state_equation_function: Callable, adjoint_state_equation_function: Callable,
                  integrand_cost_function: Callable, cost_derivative_u_function: Callable,
                  projection_gradient_operator: Callable, problem_name: str, init_u: np.array,
-                 terminate_time: int, boundary_space: np.array = None, initial_state:np.array=None,
-                 eps_cost_derivative: np.float16 = 1e-3, eps_gradient_step: np.float16 = 1e-3,
+                 terminate_time: int, boundary_space: np.array = None, initial_state: np.array=None,
+                 eps_cost_derivative: np.float16 = 1e-2, eps_gradient_step: np.float16 = 1e-2,
                  init_gradient_step: np.float16 = 1.0,
                  gradient_adjustment: np.float16 = 0.6,
                  time_grid_step: np.float16 = 1e-2, space_grid_step: np.float16 = None,
-                 gradient_step_max_iter: int = 20):
+                 gradient_step_max_iter: int = 20,
+                 ):
 
         self.logger = logging.getLogger('PMPSolver_logger')
         self.logger.setLevel(logging.DEBUG)
@@ -40,6 +41,7 @@ class PMPProjectedGradientSolver(ABC):
         self.init_u = init_u
         self.boundary_space = boundary_space
         self.init_state = initial_state
+
         self.gradient_step_max_iter = gradient_step_max_iter
         self.logger.info(f'Порядок збіжності градієнта функції втрат: {self.eps_cost_derivative}')
         self.logger.info(f'Порядок збіжності кроку градієнта: {self.eps_gradient_step}')
@@ -57,23 +59,29 @@ class PMPProjectedGradientSolver(ABC):
         self.adjoint_state_equation_function = adjoint_state_equation_function
         self.cost_derivative_u_function = cost_derivative_u_function
         self.integrand_cost_function = integrand_cost_function
-        self.gradient_projection_function = np.vectorize(projection_gradient_operator)
+        self.gradient_projection_function = projection_gradient_operator
 
         # Визначаємо вектори часу та простору
         self.time_range = np.arange(0, self.terminate_time, self.time_grid_step)
 
         # Присвоєння початкових умов
         self.current_gradient_iteration = 0
-        self.current_cost_derivative_u = [np.inf]
+        self.current_cost_derivative_u = np.array([np.inf])
         self.current_cost = np.inf
         self.new_cost = self.current_cost
         self.current_gradient_step = self.init_gradient_step
         self.current_gradient_step_iteration = 0
         self.current_u = self.init_u
         self.new_u = self.current_u
+        if self.init_state is np.ndarray:
+            self.space_dimension = self.init_state.shape
+        else:
+            self.space_dimension = 1
+        print(f'Просторова розмірність задачі: {self.space_dimension}')
 
     def norm_gradient_stop_condition(self) -> bool:
-        return l2_norm(self.current_cost_derivative_u) < self.eps_cost_derivative
+        grad_norm = l2_norm(self.current_cost_derivative_u)
+        return grad_norm < self.eps_cost_derivative
 
     def gradient_descent_loop_stop_condition(self) -> bool:
         stop_condition = (self.norm_gradient_stop_condition() &
@@ -108,10 +116,12 @@ class PMPProjectedGradientSolver(ABC):
 
             # Розв'язок рівняння стану
             self.current_state = self.solve_state_problem(self.current_u)
-
+            self.logger.info('State')
+           # self.logger.info(self.current_state)
             # Розв'язок рівняння спряженого стану
             self.current_adjoint_state = self.solve_adjoint_state_problem(self.current_state, self.current_u)
-
+            self.logger.info('adjoint State')
+            #self.logger.info(self.current_adjoint_state)
             # Обчислення градієнита функції втрат з урахуванням аналітичної формули похідної по керуванню
             self.current_cost_derivative_u = self.cost_derivative_u_function(self.current_u, self.current_state,
                                                                              self.current_adjoint_state)
@@ -131,10 +141,14 @@ class PMPProjectedGradientSolver(ABC):
                 if self.current_gradient_step < self.eps_gradient_step:
                     break
 
+                print('Current u',self.current_u)
+                print('Current gradient step', self.current_gradient_step)
+                print('Current cost derivative', self.current_cost_derivative_u)
                 # Обчислення нового керування
                 self.new_u = self.gradient_projection_function(self.current_u - self.current_gradient_step *
                                                               self.current_cost_derivative_u)
-
+                print('cost_derivative')
+                print('New u',self.new_u)
                 # Розв'язок нового рівняння стану
                 self.new_state = self.solve_state_problem(self.new_u)
 
@@ -145,6 +159,7 @@ class PMPProjectedGradientSolver(ABC):
                 cost_func = np.vectorize(self.integrand_cost_function(self.new_state, self.new_adjoint_state, self.new_u))
                 self.new_cost = self.integrate_cost(cost_func)
 
+                #print(self.new_cost)
                 if self.new_cost >= self.current_cost:
                     self.adjust_gradient_step()
                 else:
@@ -157,10 +172,23 @@ class PMPProjectedGradientSolver(ABC):
 
             # Додаткова умова виходу, коли функція втрат збігається
             if np.abs(self.new_cost - self.current_cost) <= self.eps_cost_derivative:
-                self.logger.info('Збіжності досягнуто')
+                self.logger.info(f'Збіжності досягнуто. Значення функціоналу: {-self.current_cost}')
+                if self.space_dimension == 2:
+                    viz_2d_time_gif([self.current_state[slice_idx, :, :] for slice_idx in range(self.current_state.shape[0])],
+                                    'Оптипмальний контроль вирощування, 2 виміри')
+                    viz_2d_time_gif(
+                        [self.current_state[slice_idx, :, :] for slice_idx in range(self.current_state.shape[0])],
+                        'Стан при оптмальному керуванні, 2 виміри')
                 break
         else:
-            self.logger.info('Збіжності досягнуто')
+            self.logger.info(f'Збіжності досягнуто. Значення функціоналу: {-self.current_cost}')
+            if self.space_dimension == 2:
+                viz_2d_time_gif([self.current_state[slice_idx, :, :] for slice_idx in range(self.current_state.shape[0])],
+                                'Оптипмальний контроль вирощування, 2 виміри')
+                viz_2d_time_gif(
+                    [self.current_state[slice_idx, :, :] for slice_idx in range(self.current_state.shape[0])],
+                    'Стан при оптмальному керуванні, 2 виміри')
+
 
 class PMPODESolver(PMPProjectedGradientSolver):
     def __init__(self, state_equation_function: Callable, adjoint_state_equation_function: Callable,
@@ -182,7 +210,8 @@ class PMPODESolver(PMPProjectedGradientSolver):
                  gradient_step_max_iter)
 
     def visualize_control(self):
-        viz_1d_control(self.time_range, self.current_u)
+        viz_1d_control(self.time_range, self.current_u, "Оптимальне керування u(t)", "t", "u(t)")
+        viz_1d_control(self.time_range, self.current_state, "Стан системи", "t", "x(t)")
 
     def solve_state_problem(self, u) -> np.array:
         state = solve_ivp(self.state_equation_function(u), self.init_state, self.terminate_time, self.time_grid_step)
@@ -195,4 +224,47 @@ class PMPODESolver(PMPProjectedGradientSolver):
 
     def integrate_cost(self, integrand_cost_function: Callable):
         return np.trapz(y=integrand_cost_function(self.time_range), x=self.time_range, dx=self.time_grid_step)
+
+
+class PMPPDESolver(PMPProjectedGradientSolver):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def visualize_control(self, dimensions: int = 2) -> None:
+
+        if dimensions == 2:
+            print(self.current_u)
+            viz_2d_heatmap(self.current_u, 'Оптимальний контроль', save=True)
+            viz_2d_heatmap(self.current_state, 'Стан системи', save=True)
+            viz_2d_heatmap(self.current_state, 'Стан системи', save=True)
+
+            viz_3d_plot(self.current_u, 'Оптимальний контроль', save=True)
+            viz_3d_plot(self.current_state, 'Оптимальний контроль', save=True)
+        elif dimensions == 3:
+            print(self.current_u)
+            print(self.current_u.shape)
+            viz_2d_heatmap(self.current_u[0, :, :], 'Оптимальний контроль на початку', save=True)
+            viz_2d_heatmap(self.current_state[0, :, :], 'Системи на початку', save=True)
+            viz_2d_heatmap(self.current_u[-1, :, :], 'Оптимальний контроль в кінці', save=True)
+            viz_2d_heatmap(self.current_state[-1, :, :], 'Системи в кінці', save=True)
+            viz_3d_plot(self.current_state[-1, :, :], 'Система в останній момент часу', save=True)
+            viz_3d_plot(self.current_state[0, :, :], 'Системи в початковий момент часу', save=True)
+            viz_3d_plot(self.current_u[-1, :, :], 'Оптимальне керування в останній момент часу', save=True)
+            viz_3d_plot(self.current_u[0, :, :], 'Оптимальне керування в початковий момент часу', save=True)
+
+        else:
+            viz_1d_control(self.time_range, self.current_u)
+
+    def solve_state_problem(self, u) -> np.array:
+        state = solve_ivp(self.state_equation_function(u), self.init_state, self.terminate_time, self.time_grid_step)
+        return state
+
+    def solve_adjoint_state_problem(self, state, u) -> np.array:
+        adjoint_state = solve_ivp(self.adjoint_state_equation_function(state, u), np.zeros_like(self.init_state),
+                                  self.terminate_time, self.time_grid_step, backward=True)
+        return adjoint_state
+
+    def integrate_cost(self, integrand_cost_function: Callable):
+        return np.trapz(y=integrand_cost_function(self.time_range), x=self.time_range, dx=self.time_grid_step)
+
 
